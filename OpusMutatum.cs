@@ -7,10 +7,13 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
-namespace OpusMutatum {
+namespace OpusMutatum
+{
 
-	public class OpusMutatum {
+    public class OpusMutatum {
 
 		// For intermediary or devExe
 		static string PathToLightning = "./Lightning.exe";
@@ -39,13 +42,15 @@ namespace OpusMutatum {
 			}
 		}
 
+		static readonly HttpClient client = new HttpClient();
+
 		static void Main(string[] args) {
 			ArgumentParsingMode current = ArgumentParsingMode.Argument;
 			RunAction action = RunAction.Setup;
 			foreach(var arg in args) {
 				switch(current) {
 					case ArgumentParsingMode.Argument:
-						// check if its "run", "strings", "intermediary", merge", "setup", "devExe"
+						// check if its "run", "strings", "intermediary", merge", "setup", "devExe" "updateCheck" "update"
 						// or "--mappings", "--intermediary", "--strings", "--lightning", "--monomod", "--intermediaryPath"
 						if(arg.Equals("run"))
 							action = RunAction.Run;
@@ -59,6 +64,10 @@ namespace OpusMutatum {
 							action = RunAction.Setup;
 						else if(arg.Equals("devExe"))
 							action = RunAction.DevExe;
+						else if(arg.Equals("updateCheck"))
+							action = RunAction.UpdateCheck;
+						else if(arg.Equals("update"))
+							action = RunAction.Update;
 						else if(arg.Equals("--mappings"))
 							current = ArgumentParsingMode.MappingPath;
 						else if(arg.Equals("--intermediary"))
@@ -119,6 +128,13 @@ namespace OpusMutatum {
 						break;
 					case RunAction.DevExe:
 						HandleDevExe();
+						break;
+					case RunAction.UpdateCheck:
+						UpdateAvailable();
+						break;
+					case RunAction.Update:
+						if(UpdateAvailable()) 
+							DoUpdate();
 						break;
 					case RunAction.Run:
 					default:
@@ -398,12 +414,38 @@ namespace OpusMutatum {
 				VisitTypes(type, act);
 		}
 
+		static bool UpdateAvailable() {
+			Console.WriteLine("Making Client");
+			try {
+				Console.WriteLine("Setting Headers");
+				client.DefaultRequestHeaders.Accept.Clear();
+				client.DefaultRequestHeaders.Accept.Add(
+					new MediaTypeWithQualityHeaderValue("application/vnd.github.v3+json"));
+				client.DefaultRequestHeaders.Add("User-Agent", "OpusMutatum");
+
+				Console.WriteLine("Sending Request");
+				var response = client.GetStringAsync("https://api.github.com/repos/QuintessentialOM/Quintessential/releases").Result;
+
+				//	Console.WriteLine(response);
+				return true;
+			} catch(HttpRequestException e) {
+				Console.WriteLine($"Error: {e.Message}");
+				return false;
+			}
+		}
+
+		static void DoUpdate() {
+
+		}		
+
 		static void HandleMerge() {
 			// run "./MonoMod.exe IntermediaryLightning.exe Quintessential.dll ModdedLightning.exe"
 			// then "./MonoMod.RuntimeDetour.HookGen.exe ModdedLightning.exe"
 			if(File.Exists("./MonoMod.exe")) {
 				if(File.Exists("./Quintessential.dll")) {
-					// TODO: check if there's already quintessential with this version
+
+					UpdateAvailable();
+
 					Console.WriteLine("Modding Lightning...");
 					RunAndWait(Path.Combine(Directory.GetCurrentDirectory(), "MonoMod.exe"), "IntermediaryLightning.exe Quintessential.dll ModdedLightning.exe");
 					if(!File.Exists("./ModdedLightning.exe")) {
@@ -499,7 +541,7 @@ namespace OpusMutatum {
 		}
 
 		enum RunAction{
-			Run, Strings, Intermediary, Merge, Setup, DevExe
+			Run, Strings, Intermediary, Merge, Setup, DevExe, UpdateCheck, Update
 		}
 	}
 }
